@@ -228,7 +228,9 @@ class PonderTransformer(nn.Module):
             halting_logits = []
             layer_halt = []
 
-            for _ in range(self.train_max_steps):
+            for i in range(self.train_max_steps):
+                is_last = i == (self.train_max_steps - 1)
+
                 x, halt_logits = self.block(x)
                 hiddens.append(x)
 
@@ -246,9 +248,15 @@ class PonderTransformer(nn.Module):
                 # stack the halting signal across layers and determine whether to stop early
 
                 layer_halt.append(should_halt)
-                layer_was_halted = torch.any(torch.stack(layer_halt), dim = 0)
+
+                # do not exit early if it is the last one
+
+                if is_last:
+                    continue
 
                 # break if halting has been sampled for all layers
+
+                layer_was_halted = torch.any(torch.stack(layer_halt), dim = 0)
 
                 if torch.all(layer_was_halted):
                     break
