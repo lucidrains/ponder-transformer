@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'ponder-transformer',
   packages = find_packages(),
-  version = '0.0.5',
+  version = '0.0.6',
   license='MIT',
   description = 'Ponder Transformer - Pytorch',
   author = 'Phil Wang',
