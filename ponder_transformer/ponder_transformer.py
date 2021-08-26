@@ -94,20 +94,29 @@ class Block(nn.Module):
         ff_mult = 4
     ):
         super().__init__()
+        self.causal = causal
         self.attn = PreNorm(dim, Attention(dim = dim, dim_head = dim_head, heads = heads, causal = causal))
         self.ff = PreNorm(dim, FeedForward(dim = dim, mult = ff_mult))
 
         self.to_halt_logits = nn.Sequential(
-            Reduce('b n d -> b d', 'mean'),
             nn.Linear(dim, 1),
-            Rearrange('b () -> b')
+            Rearrange('... () -> ...')
         )
 
     def forward(self, x, mask = None):
         x = self.attn(x, mask = mask) + x
         x = self.ff(x) + x
 
-        return x, self.to_halt_logits(x)
+        if self.causal:
+            denom = torch.arange(x.shape[-2], device = x.device)
+            denom = rearrange(denom, 'n -> () n ()')
+            halt_input = x.cumsum(dim = -1) / (denom + 1)
+        else:
+            halt_input = x
+
+        halt_logits = self.to_halt_logits(halt_input)
+
+        return x, halt_logits
 
 class PonderTransformer(nn.Module):
     def __init__(
@@ -126,6 +135,7 @@ class PonderTransformer(nn.Module):
     ):
         super().__init__()
         self.eps = eps
+        self.causal = causal
         self.seq_len = max_seq_len
         self.token_emb = nn.Embedding(num_tokens, dim)
         self.pos_emb = nn.Embedding(max_seq_len, dim)
@@ -157,7 +167,7 @@ class PonderTransformer(nn.Module):
         )
 
     def forward(self, x, *, labels = None, mask = None):
-        n, device, eps, max_steps = x.shape[1], x.device, self.eps, self.train_max_steps
+        n, device, eps, max_steps, causal = x.shape[1], x.device, self.eps, self.train_max_steps, self.causal
         x = self.token_emb(x)
         pos_emb = self.pos_emb(torch.arange(n, device = device))
         x = x + rearrange(pos_emb, 'n d -> () n d')
@@ -188,6 +198,10 @@ class PonderTransformer(nn.Module):
 
             geometric_dist = calc_geometric(torch.full((max_steps,), self.ponder_lambda_p, device = device))
 
+            if self.causal:
+                geometric_dist = repeat(geometric_dist, 'l -> (l n)', n = n)
+                halting_probs = rearrange(halting_probs, '... l n -> ... (l n)')
+
             kl_div_loss = F.kl_div(
                 torch.log(geometric_dist + eps),
                 halting_probs,
@@ -201,6 +215,7 @@ class PonderTransformer(nn.Module):
             labels = repeat(labels, 'b n -> b (l n)', l = max_steps)
             logits = rearrange(logits, 'b l n d -> b d (l n)')
             ce_loss = F.cross_entropy(logits, labels, ignore_index = 0)
+
             weighted_ce_loss = ce_loss * halting_probs
 
             # sum loss
