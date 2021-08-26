@@ -4,6 +4,33 @@ Implementation of a Transformer that learns to adapt the number of computational
 
 This repository would not have been possible without repeated viewings of <a href="https://www.youtube.com/watch?v=nQDZmf2Yb9k">Yannic's educational video</a>
 
+## Install
+
+```bash
+$ pip install ponder-transformer
+```
+
+## Usage
+
+```python
+import torch
+from ponder_transformer import PonderTransformer
+
+model = PonderTransformer(
+    num_tokens = 20000,
+    dim = 512,
+    max_seq_len = 512
+)
+
+mask = torch.ones(1, 512).bool()
+
+x = torch.randint(0, 20000, (1, 512))
+y = torch.randint(0, 20000, (1, 512))
+
+loss = model(x, labels = y, mask = mask)
+loss.backward()
+```
+
 ## Citations
 
 ```bibtex
