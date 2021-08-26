@@ -31,6 +31,29 @@ loss = model(x, labels = y, mask = mask)
 loss.backward()
 ```
 
+Now you can set the model to `.eval()` mode and it will terminate early when all samples of the batch have emitted a halting signal
+
+```python
+import torch
+from ponder_transformer import PonderTransformer
+
+model = PonderTransformer(
+    num_tokens = 20000,
+    dim = 512,
+    max_seq_len = 512,
+    causal = True
+)
+
+x = torch.randint(0, 20000, (2, 512))
+mask = torch.ones(2, 512).bool()
+
+model.eval() # setting to eval makes it return the logits as well as the halting indices
+
+logits, layer_indices = model(x,  mask = mask) # (2, 512, 20000), (2)
+
+# layer indices will contain, for each batch element, which layer they exited
+```
+
 ## Citations
 
 ```bibtex

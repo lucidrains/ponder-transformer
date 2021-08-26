@@ -75,11 +75,11 @@ class Attention(nn.Module):
 
 # pondering classes and helper functions
 
-def exclusive_cumprod(t):
-    return F.pad(t.cumprod(dim = -1), (1, -1), value = 1.)
+def exclusive_cumprod(t, dim = -1):
+    return F.pad(t.cumprod(dim = dim), (1, -1), value = 1.)
 
-def calc_geometric(l):
-    return exclusive_cumprod(1 - l) * l
+def calc_geometric(l, dim = -1):
+    return exclusive_cumprod(1 - l, dim = dim) * l
 
 # main class
 
@@ -189,7 +189,7 @@ class PonderTransformer(nn.Module):
             # stack halting probs (lambda) and y
 
             halting_logits = torch.stack(halting_logits, dim = 1)
-            halting_probs = calc_geometric(halting_logits.sigmoid())
+            halting_probs = calc_geometric(halting_logits.sigmoid(), dim = 1)
 
             hiddens = torch.stack(hiddens, dim = 1)
             logits = self.to_logits(hiddens)
@@ -224,7 +224,52 @@ class PonderTransformer(nn.Module):
         else:
             # evaluation mode
 
+            hiddens = []
+            halting_logits = []
+            layer_halt = []
+
             for _ in range(self.train_max_steps):
                 x, halt_logits = self.block(x)
+                hiddens.append(x)
 
-            return self.logits(x)
+                if self.causal:
+                    halt_logits = halt_logits.mean(dim = -1)
+
+                halting_logits.append(halt_logits)
+
+                # calculating halting probs
+
+                halting_probs = torch.stack(halting_logits, dim = 1).sigmoid()
+                p = calc_geometric(halting_probs, dim = 1)
+                should_halt = (torch.rand_like(p) <= p)[:, -1]
+
+                # stack the halting signal across layers and determine whether to stop early
+
+                layer_halt.append(should_halt)
+                layer_was_halted = torch.any(torch.stack(layer_halt), dim = 0)
+
+                # break if halting has been sampled for all layers
+
+                if torch.all(layer_was_halted):
+                    break
+
+            # calculate max number of layers
+
+            max_num_layers = len(layer_halt)
+
+            # stack the hiddens and the boolean tensor indicating halting for each layer
+
+            hiddens = torch.stack(hiddens, dim = 1)
+            layer_halt = torch.stack(layer_halt, dim = 1)
+
+            # calculate the index of the first halt signal, and make it the last layer if none of them halted
+
+            halt_layer_indices = (layer_halt.cumsum(dim = 1) == 0).sum(dim = 1).clamp(max = max_num_layers - 1)
+
+            # select out the correct hidden layers to logits
+
+            halt_layer_indices_expanded = repeat(halt_layer_indices, 'b -> b () n d', n = hiddens.shape[-2], d = hiddens.shape[-1])
+            hiddens = hiddens.gather(1, halt_layer_indices_expanded)
+            hiddens = rearrange(hiddens, 'b () n d -> b n d')
+
+            return self.to_logits(hiddens), halt_layer_indices
