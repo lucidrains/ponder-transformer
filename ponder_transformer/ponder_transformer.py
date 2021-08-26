@@ -242,8 +242,8 @@ class PonderTransformer(nn.Module):
                 # calculating halting probs
 
                 halting_probs = torch.stack(halting_logits, dim = 1).sigmoid()
-                p = calc_geometric(halting_probs, dim = 1)
-                should_halt = (torch.rand_like(p) <= p)[:, -1]
+                p = calc_geometric(halting_probs, dim = 1)[:, -1]
+                should_halt = torch.rand_like(p) <= p
 
                 # stack the halting signal across layers and determine whether to stop early
 
