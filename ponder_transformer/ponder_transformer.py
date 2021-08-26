@@ -110,9 +110,9 @@ class Block(nn.Module):
         if self.causal:
             denom = torch.arange(x.shape[-2], device = x.device)
             denom = rearrange(denom, 'n -> () n ()')
-            halt_input = x.cumsum(dim = -1) / (denom + 1)
+            halt_input = x.cumsum(dim = 1) / (denom + 1)
         else:
-            halt_input = x
+            halt_input = x.mean(dim = 1)
 
         halt_logits = self.to_halt_logits(halt_input)
 
