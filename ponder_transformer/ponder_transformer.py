@@ -206,8 +206,7 @@ class PonderTransformer(nn.Module):
                 torch.log(geometric_dist + eps),
                 halting_probs,
                 None, None,
-                'batchmean',
-                log_target = True
+                'batchmean'
             )
 
             # calculate cross entropy loss
@@ -220,7 +219,7 @@ class PonderTransformer(nn.Module):
 
             # sum loss
 
-            loss = weighted_ce_loss.sum() + self.ponder_kl_div_loss_weight * kl_div_loss.sum()
+            loss = weighted_ce_loss.mean() + self.ponder_kl_div_loss_weight * kl_div_loss.mean()
             return loss
         else:
             # evaluation mode
