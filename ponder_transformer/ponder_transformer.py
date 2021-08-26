@@ -75,8 +75,15 @@ class Attention(nn.Module):
 
 # pondering classes and helper functions
 
+def pad_to(t, padding, dim = -1, value = 0.):
+    if dim > 0:
+        dim = dim - t.ndim
+    zeroes = -dim - 1
+    return F.pad(t, (*((0, 0) * zeroes), *padding), value = value)
+
 def exclusive_cumprod(t, dim = -1):
-    return F.pad(t.cumprod(dim = dim), (1, -1), value = 1.)
+    cum_prod = t.cumprod(dim = dim)
+    return pad_to(cum_prod, (1, -1), value = 1., dim = dim)
 
 def calc_geometric(l, dim = -1):
     return exclusive_cumprod(1 - l, dim = dim) * l
