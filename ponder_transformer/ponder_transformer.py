@@ -242,7 +242,7 @@ class PonderTransformer(nn.Module):
                 hiddens.append(x)
 
                 if self.causal:
-                    halt_logits = halt_logits.mean(dim = -1)
+                    halt_logits = halt_logits[..., -1]
 
                 halting_logits.append(halt_logits)
 
