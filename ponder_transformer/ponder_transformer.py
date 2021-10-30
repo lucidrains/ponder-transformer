@@ -81,8 +81,12 @@ def pad_to(t, padding, dim = -1, value = 0.):
     zeroes = -dim - 1
     return F.pad(t, (*((0, 0) * zeroes), *padding), value = value)
 
+def safe_cumprod(t, eps = 1e-10, dim = -1):
+    t = torch.clip(t, min = eps, max = 1.)
+    return torch.exp(torch.cumsum(torch.log(t), dim = dim))
+
 def exclusive_cumprod(t, dim = -1):
-    cum_prod = t.cumprod(dim = dim)
+    cum_prod = safe_cumprod(t, dim = dim)
     return pad_to(cum_prod, (1, -1), value = 1., dim = dim)
 
 def calc_geometric(l, dim = -1):
